@@ -113,7 +113,11 @@ describe("content extraction", () => {
         <form action="java${"\n"}script:alert(1)"><button>newline form</button></form>
         <img data-src="//mmbiz.qpic.cn/safe.jpg" onerror="alert(1)" src="javascript:alert(2)">
         <img src="java${"\n"}script:alert(3)">
-        <svg onload="alert(1)"><circle></circle></svg>
+        <svg onload="alert(1)">
+          <circle></circle>
+          <use xlink:href="java${"\t"}script:alert(1)"></use>
+          <a xlink:href="java${"\n"}script:alert(2)">bad svg link</a>
+        </svg>
         <iframe srcdoc="<script>alert(1)</script>" src="https://example.com"></iframe>
         <object data="https://example.com"></object>
         <embed src="https://example.com">
@@ -135,6 +139,7 @@ describe("content extraction", () => {
     expect(article.bodyHtml).not.toMatch(/\son[a-z]+\s*=/i);
     expect(article.bodyHtml).not.toMatch(/javascript:/i);
     expect(article.bodyHtml.replace(/[\u0000-\u001f\u007f\s]/g, "")).not.toMatch(/javascript:/i);
+    expect(article.bodyHtml.replace(/[\u0000-\u001f\u007f\s]/g, "")).not.toMatch(/xlink:href=["']?javascript:/i);
     expect(article.bodyHtml).not.toMatch(/srcdoc/i);
     expect(article.bodyHtml).not.toContain("<iframe");
     expect(article.bodyHtml).not.toContain("<script");
@@ -145,6 +150,7 @@ describe("content extraction", () => {
     expect(article.bodyHtml).not.toContain("<base");
     expect(html).not.toMatch(/\son[a-z]+\s*=/i);
     expect(html).not.toMatch(/javascript:/i);
+    expect(html.replace(/[\u0000-\u001f\u007f\s]/g, "")).not.toMatch(/xlink:href=["']?javascript:/i);
     expect(html).not.toContain("<iframe");
     expect(html).not.toContain("<script");
   });
