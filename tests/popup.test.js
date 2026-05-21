@@ -28,10 +28,12 @@ function createPopupDom(checkedValue = "html") {
 }
 
 function stubChrome(tabUrl, options = {}) {
-  const tab = {
-    id: 7,
-    url: tabUrl
-  };
+  const tab = options.tab === undefined
+    ? {
+        id: 7,
+        url: tabUrl
+      }
+    : options.tab;
   const exportResponse = options.exportResponse || {
     ok: true,
     payload: {
@@ -53,7 +55,7 @@ function stubChrome(tabUrl, options = {}) {
 
   globalThis.chrome = {
     tabs: {
-      query: vi.fn(async () => [tab]),
+      query: options.query || vi.fn(async () => (tab ? [tab] : [])),
       sendMessage: vi.fn(async () => exportResponse)
     },
     runtime: {
@@ -78,6 +80,21 @@ describe("popup helpers and flow", () => {
     expect(popup.isWeChatArticleUrl("https://m.mp.weixin.qq.com/s/demo")).toBe(false);
     expect(popup.isWeChatArticleUrl("https://example.com/s/demo")).toBe(false);
     expect(popup.isWeChatArticleUrl("not a url")).toBe(false);
+  });
+
+  it("enables export only for likely single article routes", async () => {
+    expect(popup.isLikelyWeChatArticleUrl("https://mp.weixin.qq.com/s/demo")).toBe(true);
+    expect(popup.isLikelyWeChatArticleUrl("https://mp.weixin.qq.com/s?__biz=demo")).toBe(true);
+    expect(popup.isLikelyWeChatArticleUrl("https://mp.weixin.qq.com/cgi-bin/home")).toBe(false);
+
+    stubChrome("https://mp.weixin.qq.com/cgi-bin/home");
+    const dom = createPopupDom();
+
+    await popup.bind(dom.window.document);
+
+    expect(dom.window.document.getElementById("exportButton").disabled).toBe(true);
+    expect(dom.window.document.getElementById("status").textContent).toBe("当前页面不是支持的公众号文章。");
+    expect(dom.window.document.getElementById("status").className).toBe("error");
   });
 
   it("returns the checked format and falls back to html", async () => {
@@ -127,5 +144,83 @@ describe("popup helpers and flow", () => {
     expect(dom.window.document.getElementById("status").textContent).toBe("导出完成。");
     expect(dom.window.document.getElementById("status").className).toBe("success");
     expect(dom.window.document.getElementById("exportButton").disabled).toBe(false);
+  });
+
+  it("shows warning status for partial image failures", async () => {
+    stubChrome("https://mp.weixin.qq.com/s/demo", {
+      downloadResponse: {
+        ok: true,
+        result: {
+          imageTotal: 3,
+          imageFailed: 2
+        }
+      }
+    });
+    const dom = createPopupDom();
+
+    await popup.bind(dom.window.document);
+    await popup.exportCurrentArticle();
+
+    expect(dom.window.document.getElementById("status").textContent).toBe("导出完成，2 张图片下载失败，已写入报告。");
+    expect(dom.window.document.getElementById("status").className).toBe("warning");
+    expect(dom.window.document.getElementById("status").className).not.toBe("success");
+  });
+
+  it("shows content script errors and re-enables article exports", async () => {
+    stubChrome("https://mp.weixin.qq.com/s/demo", {
+      exportResponse: {
+        ok: false,
+        error: "Article content not found"
+      }
+    });
+    const dom = createPopupDom();
+
+    await popup.bind(dom.window.document);
+    await popup.exportCurrentArticle();
+
+    expect(dom.window.document.getElementById("status").textContent).toBe("Article content not found");
+    expect(dom.window.document.getElementById("status").className).toBe("error");
+    expect(dom.window.document.getElementById("exportButton").disabled).toBe(false);
+  });
+
+  it("shows background errors and re-enables article exports", async () => {
+    stubChrome("https://mp.weixin.qq.com/s/demo", {
+      downloadResponse: {
+        ok: false,
+        error: "ZIP failed"
+      }
+    });
+    const dom = createPopupDom();
+
+    await popup.bind(dom.window.document);
+    await popup.exportCurrentArticle();
+
+    expect(dom.window.document.getElementById("status").textContent).toBe("ZIP failed");
+    expect(dom.window.document.getElementById("status").className).toBe("error");
+    expect(dom.window.document.getElementById("exportButton").disabled).toBe(false);
+  });
+
+  it("keeps export disabled when the active tab cannot be resolved", async () => {
+    stubChrome("https://mp.weixin.qq.com/s/demo", {
+      query: vi.fn(async () => {
+        throw new Error("tabs unavailable");
+      })
+    });
+    const rejectedDom = createPopupDom();
+
+    await popup.bind(rejectedDom.window.document);
+
+    expect(rejectedDom.window.document.getElementById("exportButton").disabled).toBe(true);
+    expect(rejectedDom.window.document.getElementById("status").textContent).toBe("tabs unavailable");
+    expect(rejectedDom.window.document.getElementById("status").className).toBe("error");
+
+    stubChrome("", { tab: null });
+    const noTabDom = createPopupDom();
+
+    await popup.bind(noTabDom.window.document);
+
+    expect(noTabDom.window.document.getElementById("exportButton").disabled).toBe(true);
+    expect(noTabDom.window.document.getElementById("status").textContent).toBe("当前页面不是支持的公众号文章。");
+    expect(noTabDom.window.document.getElementById("status").className).toBe("error");
   });
 });

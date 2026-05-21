@@ -19,6 +19,7 @@
   let documentRef;
   let exportButton;
   let status;
+  const UNSUPPORTED_ARTICLE_MESSAGE = "当前页面不是支持的公众号文章。";
 
   function bind(nextDocument) {
     documentRef = nextDocument;
@@ -64,6 +65,26 @@
     }
   }
 
+  function isLikelyWeChatArticleUrl(url) {
+    try {
+      const parsedUrl = new URL(url);
+
+      return parsedUrl.hostname === "mp.weixin.qq.com" &&
+        (parsedUrl.pathname === "/s" || parsedUrl.pathname.indexOf("/s/") === 0);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function setUnsupportedPageStatus(tab) {
+    if (tab && tab.url && !isWeChatArticleUrl(tab.url)) {
+      setStatus("当前页面不是微信公众号文章。", "error");
+      return;
+    }
+
+    setStatus(UNSUPPORTED_ARTICLE_MESSAGE, "error");
+  }
+
   async function initialize() {
     if (!exportButton) {
       return;
@@ -74,8 +95,8 @@
     try {
       const tab = await currentTab();
 
-      if (!tab || !isWeChatArticleUrl(tab.url)) {
-        setStatus("当前页面不是微信公众号文章。", "error");
+      if (!tab || !isLikelyWeChatArticleUrl(tab.url)) {
+        setUnsupportedPageStatus(tab);
         return;
       }
 
@@ -109,8 +130,8 @@
     try {
       const tab = await currentTab();
 
-      if (!tab || !isWeChatArticleUrl(tab.url)) {
-        setStatus("当前页面不是微信公众号文章。", "error");
+      if (!tab || !isLikelyWeChatArticleUrl(tab.url)) {
+        setUnsupportedPageStatus(tab);
         return;
       }
 
@@ -150,7 +171,7 @@
 
     try {
       const tab = await currentTab();
-      exportButton.disabled = !tab || !isWeChatArticleUrl(tab.url);
+      exportButton.disabled = !tab || !isLikelyWeChatArticleUrl(tab.url);
     } catch (_error) {
       exportButton.disabled = true;
     }
@@ -161,6 +182,7 @@
     currentTab: currentTab,
     exportCurrentArticle: exportCurrentArticle,
     initialize: initialize,
+    isLikelyWeChatArticleUrl: isLikelyWeChatArticleUrl,
     isWeChatArticleUrl: isWeChatArticleUrl,
     selectedFormat: selectedFormat,
     setStatus: setStatus
