@@ -64,6 +64,9 @@ function stubChrome(tabUrl, options = {}) {
     },
     runtime: {
       sendMessage: vi.fn(async () => downloadResponse)
+    },
+    scripting: {
+      executeScript: vi.fn(async () => [])
     }
   };
 
@@ -160,6 +163,42 @@ describe("popup helpers and flow", () => {
     expect(dom.window.document.getElementById("status").textContent).toBe("导出完成。");
     expect(dom.window.document.getElementById("status").className).toBe("success");
     expect(dom.window.document.getElementById("exportButton").disabled).toBe(false);
+  });
+
+  it("injects content scripts and retries when the page has no receiver", async () => {
+    const chrome = stubChrome("https://mp.weixin.qq.com/s/demo");
+    chrome.tabs.sendMessage
+      .mockRejectedValueOnce(new Error("Could not establish connection. Receiving end does not exist."))
+      .mockResolvedValueOnce({
+        ok: true,
+        payload: {
+          article: {
+            images: []
+          },
+          files: {
+            html: "<p>demo</p>"
+          }
+        }
+      });
+    const dom = createPopupDom();
+
+    await popup.bind(dom.window.document);
+    await popup.exportCurrentArticle();
+
+    expect(chrome.scripting.executeScript).toHaveBeenCalledWith({
+      target: {
+        tabId: 7
+      },
+      files: [
+        "vendor/turndown.js",
+        "vendor/html2pdf.bundle.min.js",
+        "shared.js",
+        "content.js"
+      ]
+    });
+    expect(chrome.tabs.sendMessage).toHaveBeenCalledTimes(2);
+    expect(dom.window.document.getElementById("status").textContent).toBe("导出完成。");
+    expect(dom.window.document.getElementById("status").className).toBe("success");
   });
 
   it("shows warning status for partial image failures", async () => {

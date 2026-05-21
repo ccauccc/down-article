@@ -20,6 +20,12 @@
   let exportButton;
   let status;
   const UNSUPPORTED_ARTICLE_MESSAGE = "当前页面不是支持的公众号文章。";
+  const CONTENT_SCRIPT_FILES = [
+    "vendor/turndown.js",
+    "vendor/html2pdf.bundle.min.js",
+    "shared.js",
+    "content.js"
+  ];
 
   function bind(nextDocument) {
     documentRef = nextDocument;
@@ -119,6 +125,39 @@
     return response.payload || response.result || {};
   }
 
+  function isMissingContentScriptError(error) {
+    const message = error && error.message ? error.message : String(error || "");
+
+    return /Could not establish connection|Receiving end does not exist/i.test(message);
+  }
+
+  async function injectContentScripts(tabId) {
+    if (!root.chrome.scripting || typeof root.chrome.scripting.executeScript !== "function") {
+      throw new Error("页面脚本未加载，请刷新文章页后重试。");
+    }
+
+    await root.chrome.scripting.executeScript({
+      target: {
+        tabId: tabId
+      },
+      files: CONTENT_SCRIPT_FILES
+    });
+  }
+
+  async function sendExportMessage(tab, message) {
+    try {
+      return await root.chrome.tabs.sendMessage(tab.id, message);
+    } catch (error) {
+      if (!isMissingContentScriptError(error)) {
+        throw error;
+      }
+
+      setStatus("正在连接文章页面...", "");
+      await injectContentScripts(tab.id);
+      return root.chrome.tabs.sendMessage(tab.id, message);
+    }
+  }
+
   async function exportCurrentArticle() {
     if (!exportButton || exportButton.disabled) {
       return;
@@ -135,7 +174,7 @@
         return;
       }
 
-      const articlePayload = responsePayload(await root.chrome.tabs.sendMessage(tab.id, {
+      const articlePayload = responsePayload(await sendExportMessage(tab, {
         type: "EXPORT_WECHAT_ARTICLE",
         format: selectedFormat()
       }), "读取文章内容失败。");
@@ -185,6 +224,7 @@
     isLikelyWeChatArticleUrl: isLikelyWeChatArticleUrl,
     isWeChatArticleUrl: isWeChatArticleUrl,
     selectedFormat: selectedFormat,
+    sendExportMessage: sendExportMessage,
     setStatus: setStatus
   };
 });
