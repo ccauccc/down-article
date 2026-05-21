@@ -25,3 +25,12 @@ npm test
 - ZIP output contains `article.html`, `images/`, and `export-report.json`.
 - Markdown and PDF exports are best-effort companion formats.
 - All processing happens locally in the browser extension.
+
+## Manual Verification Checklist
+
+- Non-WeChat pages disable export.
+- Non-article WeChat pages disable export.
+- WeChat article HTML export downloads a ZIP.
+- ZIP includes `article.html`, `images/`, and `export-report.json`.
+- `article.html` opens offline and keeps the article body readable with local images.
+- Markdown and PDF exports are companion formats and may be less visually exact than HTML.
