@@ -1,9 +1,13 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
 const popup = require("../extension/popup");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function createPopupDom(checkedValue = "html") {
   const dom = new JSDOM(`<!doctype html>
@@ -73,6 +77,18 @@ describe("popup helpers and flow", () => {
 
   afterEach(() => {
     delete globalThis.chrome;
+  });
+
+  it("ships readable Chinese popup markup", () => {
+    const html = fs.readFileSync(path.join(__dirname, "..", "extension", "popup.html"), "utf8");
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+
+    expect(document.querySelector("h1").textContent).toBe("文章导出");
+    expect(document.querySelector("legend").textContent).toBe("导出格式");
+    expect(document.getElementById("exportButton").textContent).toBe("导出");
+    expect(document.getElementById("status").textContent).toBe("打开公众号文章后即可导出。");
+    expect(html).not.toContain("?/p>");
   });
 
   it("accepts only mp.weixin.qq.com article hostnames", () => {
