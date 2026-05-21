@@ -2,6 +2,7 @@
   "name": "wechat-article-exporter",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "Chrome extension for exporting WeChat public account articles as local ZIP archives.",
   "scripts": {
     "test": "vitest run",
