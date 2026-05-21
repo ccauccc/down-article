@@ -16,6 +16,16 @@ const files = [
   {
     from: path.join(root, "node_modules", "html2pdf.js", "dist", "html2pdf.bundle.min.js"),
     to: path.join(vendorDir, "html2pdf.bundle.min.js")
+  },
+  {
+    from: path.join(root, "node_modules", "html2pdf.js", "dist", "html2pdf.bundle.min.js.LICENSE.txt"),
+    to: path.join(vendorDir, "html2pdf.bundle.min.js.LICENSE.txt"),
+    optional: true
+  },
+  {
+    from: path.join(root, "node_modules", "html2pdf.js", "dist", "html2pdf.bundle.min.js.map"),
+    to: path.join(vendorDir, "html2pdf.bundle.min.js.map"),
+    optional: true
   }
 ];
 
@@ -23,6 +33,11 @@ fs.mkdirSync(vendorDir, { recursive: true });
 
 for (const file of files) {
   if (!fs.existsSync(file.from)) {
+    if (file.optional) {
+      console.log(`Skipped missing optional vendor file: ${path.relative(root, file.from)}`);
+      continue;
+    }
+
     throw new Error(`Missing dependency bundle: ${file.from}. Run npm install first.`);
   }
 
