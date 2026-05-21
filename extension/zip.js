@@ -15,7 +15,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (root, shared) {
   "use strict";
 
-  const SAFE_IMAGE_LOCAL_PATH = /^images\/[A-Za-z0-9_-]+\.(?:avif|bmp|gif|ico|jpe?g|png|svg|tiff?|webp)$/i;
+  const SAFE_IMAGE_LOCAL_PATH = /^images\/img-[0-9]{3,}\.(?:avif|bmp|gif|ico|jpe?g|png|svg|tiff?|webp)$/i;
 
   function requireShared() {
     if (!shared) {

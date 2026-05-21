@@ -203,6 +203,12 @@ describe("zip packaging", () => {
           data: new Uint8Array([6])
         },
         {
+          sourceUrl: "https://mmbiz.qpic.cn/wrong-basename.jpg",
+          localPath: "images/not-img.jpg",
+          ok: true,
+          data: new Uint8Array([8])
+        },
+        {
           sourceUrl: "https://mmbiz.qpic.cn/safe.webp",
           localPath: "images/img-007.webp",
           ok: true,
@@ -218,10 +224,11 @@ describe("zip packaging", () => {
     expect(archive.file("other/img-004.jpg")).toBeNull();
     expect(archive.file("images/img-005\u0000.jpg")).toBeNull();
     expect(archive.file("images/img-006.exe")).toBeNull();
+    expect(archive.file("images/not-img.jpg")).toBeNull();
     await expect(archive.file("images/img-007.webp").async("uint8array")).resolves.toEqual(new Uint8Array([7]));
-    expect(report.imageTotal).toBe(7);
+    expect(report.imageTotal).toBe(8);
     expect(report.imageSucceeded).toBe(1);
-    expect(report.imageFailed).toBe(6);
+    expect(report.imageFailed).toBe(7);
     expect(report.failures).toEqual([
       {
         url: "https://mmbiz.qpic.cn/traversal.jpg",
@@ -251,6 +258,11 @@ describe("zip packaging", () => {
       {
         url: "https://mmbiz.qpic.cn/bad-ext.jpg",
         localPath: "images/img-006.exe",
+        error: "Unsafe image path"
+      },
+      {
+        url: "https://mmbiz.qpic.cn/wrong-basename.jpg",
+        localPath: "images/not-img.jpg",
         error: "Unsafe image path"
       }
     ]);
