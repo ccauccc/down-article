@@ -195,14 +195,25 @@
 
     const resolvedSourceUrl = sourceUrl || documentRef.location && documentRef.location.href || "";
     const bodyClone = articleBody.cloneNode(true);
+    const pdfBodyClone = articleBody.cloneNode(true);
     const images = [];
 
     sanitizeArticleElement(bodyClone);
+    sanitizeArticleElement(pdfBodyClone);
 
-    Array.from(bodyClone.querySelectorAll("img")).forEach(function (image) {
+    const pdfImages = Array.from(pdfBodyClone.querySelectorAll("img"));
+
+    Array.from(bodyClone.querySelectorAll("img")).forEach(function (image, index) {
+      const pdfImage = pdfImages[index];
       const sourceImageUrl = imageSource(image, resolvedSourceUrl);
 
       if (!sourceImageUrl) {
+        image.remove();
+
+        if (pdfImage) {
+          pdfImage.remove();
+        }
+
         return;
       }
 
@@ -218,6 +229,14 @@
       image.removeAttribute("data-original");
       image.removeAttribute("srcset");
       image.setAttribute("loading", "lazy");
+
+      if (pdfImage) {
+        pdfImage.setAttribute("src", sourceImageUrl);
+        pdfImage.removeAttribute("data-src");
+        pdfImage.removeAttribute("data-original");
+        pdfImage.removeAttribute("srcset");
+        pdfImage.setAttribute("loading", "lazy");
+      }
     });
 
     return {
@@ -226,6 +245,7 @@
       publishedAt: textFrom(documentRef, "#publish_time"),
       sourceUrl: resolvedSourceUrl,
       bodyHtml: bodyClone.innerHTML,
+      pdfBodyHtml: pdfBodyClone.innerHTML,
       images: images
     };
   }
@@ -315,6 +335,41 @@
       turndown.turndown(article && article.bodyHtml || "") + "\n";
   }
 
+  function restorePdfBodyHtml(article) {
+    const bodyHtml = article && article.bodyHtml || "";
+
+    if (article && article.pdfBodyHtml) {
+      return article.pdfBodyHtml;
+    }
+
+    if (!article || !Array.isArray(article.images) || !bodyHtml) {
+      return bodyHtml;
+    }
+
+    const documentRef = root && root.document;
+
+    if (!documentRef || typeof documentRef.createElement !== "function") {
+      return bodyHtml;
+    }
+
+    const container = documentRef.createElement("div");
+    container.innerHTML = bodyHtml;
+
+    article.images.forEach(function (image) {
+      if (!image || !image.localPath || !image.sourceUrl) {
+        return;
+      }
+
+      Array.from(container.querySelectorAll("img")).forEach(function (element) {
+        if (element.getAttribute("src") === image.localPath) {
+          element.setAttribute("src", image.sourceUrl);
+        }
+      });
+    });
+
+    return container.innerHTML;
+  }
+
   async function buildPdfBase64(article) {
     const html2pdf = root && root.html2pdf;
     const documentRef = root && root.document;
@@ -325,7 +380,10 @@
     }
 
     const wrapper = documentRef.createElement("div");
-    wrapper.innerHTML = buildArticleHtml(article);
+    wrapper.innerHTML = buildArticleHtml({
+      ...article,
+      bodyHtml: restorePdfBodyHtml(article)
+    });
     const blob = await html2pdf()
       .set({
         margin: 10,

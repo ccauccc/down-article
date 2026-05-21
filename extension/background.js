@@ -16,7 +16,7 @@ function imageUrlError(sourceUrl) {
     const protocol = url.protocol.toLowerCase();
     const hostname = url.hostname.toLowerCase();
 
-    if (protocol !== "http:" && protocol !== "https:") {
+    if (protocol !== "https:") {
       return "Unsupported image URL";
     }
 
@@ -62,7 +62,7 @@ async function fetchImage(image) {
 
   try {
     const response = await fetch(image.sourceUrl, {
-      credentials: "include",
+      credentials: "omit",
       cache: "force-cache"
     });
 

@@ -183,6 +183,21 @@ describe("content extraction", () => {
     ]);
   });
 
+  it("skips malformed image URLs without aborting extraction", () => {
+    const documentRef = createDocument(`
+      <h1 class="rich_media_title">Malformed</h1>
+      <div id="js_content">
+        <p>body</p>
+        <img data-src="/bad.jpg" src="https://bad host/image.jpg">
+      </div>
+    `, "about:blank");
+
+    const article = content.extractArticle(documentRef, "not a base url");
+
+    expect(article.bodyHtml).toContain("<p>body</p>");
+    expect(article.images).toEqual([]);
+  });
+
   it("throws a clear error when article content is missing", () => {
     const documentRef = createDocument(`<h1 class="rich_media_title">Missing</h1>`);
 
@@ -215,6 +230,45 @@ describe("content extraction", () => {
   it("returns empty markdown and PDF strings when optional browser libraries are unavailable", async () => {
     await expect(content.buildMarkdown({ title: "Demo", bodyHtml: "<p>body</p>" })).resolves.toBe("");
     await expect(content.buildPdfBase64({ title: "Demo", bodyHtml: "<p>body</p>" })).resolves.toBe("");
+  });
+
+  it("builds PDFs from original remote image URLs while extracted body HTML stays localized", async () => {
+    const dom = createDom(`
+      <h1 class="rich_media_title"> PDF Article </h1>
+      <div id="js_content">
+        <p>body</p>
+        <img data-src="https://mmbiz.qpic.cn/pdf.jpg">
+      </div>
+    `);
+    let renderedWrapper;
+
+    vi.stubGlobal("document", dom.window.document);
+    vi.stubGlobal("FileReader", class FakeFileReader {
+      readAsDataURL() {
+        this.result = "data:application/pdf;base64,cGRm";
+        this.onload();
+      }
+    });
+    vi.stubGlobal("html2pdf", () => ({
+      set() {
+        return this;
+      },
+      from(wrapper) {
+        renderedWrapper = wrapper;
+        return this;
+      },
+      async outputPdf() {
+        return new Blob(["pdf"], { type: "application/pdf" });
+      }
+    }));
+
+    const article = content.extractArticle(dom.window.document, "https://mp.weixin.qq.com/s/demo");
+    const pdfBase64 = await content.buildPdfBase64(article);
+
+    expect(article.bodyHtml).toContain('src="images/img-001.jpg"');
+    expect(pdfBase64).toBe("cGRm");
+    expect(renderedWrapper.innerHTML).toContain('src="https://mmbiz.qpic.cn/pdf.jpg"');
+    expect(renderedWrapper.innerHTML).not.toContain('src="images/img-001.jpg"');
   });
 
   it("builds markdown when TurndownService is available", async () => {

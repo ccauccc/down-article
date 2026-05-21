@@ -123,7 +123,11 @@
       return "";
     }
 
-    return new URL(url, baseUrl).href;
+    try {
+      return new URL(url, baseUrl).href;
+    } catch (_error) {
+      return "";
+    }
   }
 
   function normalizeExtension(extension) {

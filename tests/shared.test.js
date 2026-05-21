@@ -33,6 +33,11 @@ describe("shared helpers", () => {
     expect(shared.resolveUrl("/cgi-bin/readtemplate", "https://mp.weixin.qq.com/s/x")).toBe("https://mp.weixin.qq.com/cgi-bin/readtemplate");
   });
 
+  it("returns an empty string for invalid URL/base combinations", () => {
+    expect(shared.resolveUrl("/image.jpg", "not a base url")).toBe("");
+    expect(shared.resolveUrl("https://exa mple.com/image.jpg", "https://mp.weixin.qq.com/s/x")).toBe("");
+  });
+
   it("infers extensions from content type and URL", () => {
     expect(shared.extensionFromContentType("image/png", "")).toBe("png");
     expect(shared.extensionFromContentType("image/jpeg", "")).toBe("jpg");

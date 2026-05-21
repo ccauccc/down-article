@@ -68,7 +68,7 @@ function articlePayload(images) {
 }
 
 describe("background export pipeline", () => {
-  it("rejects missing, non-http, and unsupported-host image URLs before fetch", async () => {
+  it("rejects missing, non-https, and unsupported-host image URLs before fetch", async () => {
     const { fetchImpl, sandbox } = createSandbox();
 
     await expect(sandbox.fetchImage({ localPath: "images/img-001.jpg" })).resolves.toMatchObject({
@@ -79,6 +79,10 @@ describe("background export pipeline", () => {
       ok: false,
       error: "Unsupported image URL"
     });
+    await expect(sandbox.fetchImage({ sourceUrl: "http://mmbiz.qpic.cn/image.jpg" })).resolves.toMatchObject({
+      ok: false,
+      error: "Unsupported image URL"
+    });
     await expect(sandbox.fetchImage({ sourceUrl: "https://example.com/image.jpg" })).resolves.toMatchObject({
       ok: false,
       error: "Unsupported image host"
@@ -86,7 +90,7 @@ describe("background export pipeline", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it("fetches allowed WeChat image URLs with credentials and force cache", async () => {
+  it("fetches allowed WeChat image URLs without credentials and with force cache", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer
@@ -101,7 +105,7 @@ describe("background export pipeline", () => {
       data: new Uint8Array([1, 2, 3])
     });
     expect(fetchImpl).toHaveBeenCalledWith("https://mmbiz.qpic.cn/mmbiz_jpg/demo/0", {
-      credentials: "include",
+      credentials: "omit",
       cache: "force-cache"
     });
   });
