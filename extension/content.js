@@ -111,7 +111,15 @@
   }
 
   function isDangerousUrl(value) {
-    return String(value || "").trim().toLowerCase().indexOf("javascript:") === 0;
+    const text = String(value || "");
+    const colonIndex = text.indexOf(":");
+
+    if (colonIndex === -1) {
+      return false;
+    }
+
+    const protocol = text.slice(0, colonIndex).replace(/[\u0000-\u0020\u007f]+/g, "").toLowerCase();
+    return protocol === "javascript";
   }
 
   function sanitizeElementAttributes(element) {
@@ -145,8 +153,14 @@
       .replace(/<\s*(script|iframe|object|embed|link|meta|base)\b[^>]*\/?\s*>/gi, "")
       .replace(/\s+on[a-z0-9:_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
       .replace(/\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-      .replace(/\s+(href|src|action|xlink:href)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi, "")
-      .replace(/\s+(href|src|action|xlink:href)\s*=\s*javascript:[^\s>]*/gi, "");
+      .replace(/\s+(href|src|action|xlink:href)\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi, function (match, _name, rawValue) {
+        const firstCharacter = rawValue.charAt(0);
+        const value = firstCharacter === "\"" || firstCharacter === "'"
+          ? rawValue.slice(1, -1)
+          : rawValue;
+
+        return isDangerousUrl(value) ? "" : match;
+      });
   }
 
   function sanitizeBodyHtml(html) {

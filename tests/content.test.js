@@ -107,8 +107,12 @@ describe("content extraction", () => {
       <div id="js_content">
         <p onclick="alert(1)" style="color:red" class="keep">safe</p>
         <a href=" JAVASCRIPT:alert(1) ">bad link</a>
+        <a href="java${"\t"}script:alert(1)">tabbed bad link</a>
+        <a class="nul-link" href="#">nul bad link</a>
         <form action="javascript:alert(1)"><button>bad form</button></form>
+        <form action="java${"\n"}script:alert(1)"><button>newline form</button></form>
         <img data-src="//mmbiz.qpic.cn/safe.jpg" onerror="alert(1)" src="javascript:alert(2)">
+        <img src="java${"\n"}script:alert(3)">
         <svg onload="alert(1)"><circle></circle></svg>
         <iframe srcdoc="<script>alert(1)</script>" src="https://example.com"></iframe>
         <object data="https://example.com"></object>
@@ -120,6 +124,8 @@ describe("content extraction", () => {
       </div>
     `);
 
+    documentRef.querySelector(".nul-link").setAttribute("href", "\u0000javascript:alert(1)");
+
     const article = content.extractArticle(documentRef, "https://mp.weixin.qq.com/s/demo");
     const html = content.buildArticleHtml(article);
 
@@ -128,6 +134,7 @@ describe("content extraction", () => {
     expect(article.bodyHtml).toContain('src="images/img-001.jpg"');
     expect(article.bodyHtml).not.toMatch(/\son[a-z]+\s*=/i);
     expect(article.bodyHtml).not.toMatch(/javascript:/i);
+    expect(article.bodyHtml.replace(/[\u0000-\u001f\u007f\s]/g, "")).not.toMatch(/javascript:/i);
     expect(article.bodyHtml).not.toMatch(/srcdoc/i);
     expect(article.bodyHtml).not.toContain("<iframe");
     expect(article.bodyHtml).not.toContain("<script");
