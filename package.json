@@ -1,0 +1,21 @@
+{
+  "name": "wechat-article-exporter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension for exporting WeChat public account articles as local ZIP archives.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "vendor": "node scripts/copy-vendor.js",
+    "verify": "npm run vendor && npm test"
+  },
+  "dependencies": {
+    "html2pdf.js": "^0.10.2",
+    "jszip": "^3.10.1",
+    "turndown": "^7.2.0"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3",
+    "vitest": "^2.1.9"
+  }
+}

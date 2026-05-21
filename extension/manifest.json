@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "WeChat Article Exporter",
+  "version": "0.1.0",
+  "description": "Export the current WeChat public account article as a local ZIP archive.",
+  "permissions": ["activeTab", "downloads"],
+  "host_permissions": ["*://mp.weixin.qq.com/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://mp.weixin.qq.com/*"],
+      "js": [
+        "vendor/turndown.js",
+        "vendor/html2pdf.bundle.min.js",
+        "shared.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
