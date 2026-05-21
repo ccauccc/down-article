@@ -15,7 +15,7 @@
 - Create `package.json`: npm scripts, runtime libraries, test dependencies.
 - Create `scripts/copy-vendor.js`: copies minified browser bundles from `node_modules` into `extension/vendor/`.
 - Create `extension/manifest.json`: MV3 extension definition, popup, background worker, content scripts, host permissions.
-- Create `extension/popup.html`: minimal format selector, export button, status region.
+- Create `extension/popup.html`: placeholder first, then minimal format selector, export button, status region.
 - Create `extension/popup.css`: compact popup styling.
 - Create `extension/popup.js`: tab validation, message dispatch, progress display.
 - Create `extension/shared.js`: UMD helper functions for filename safety, URL handling, image file naming, MIME extension inference, and report creation.
@@ -36,6 +36,10 @@
 - Create: `package.json`
 - Create: `scripts/copy-vendor.js`
 - Create: `extension/manifest.json`
+- Create: `extension/popup.html`
+- Create: `extension/background.js`
+- Create: `extension/shared.js`
+- Create: `extension/content.js`
 - Create: `extension/vendor/.gitkeep`
 - Modify: `README.md`
 
@@ -66,7 +70,7 @@ Create `package.json`:
     "verify": "npm run vendor && npm test"
   },
   "dependencies": {
-    "html2pdf.js": "^0.10.2",
+    "html2pdf.js": "^0.14.0",
     "jszip": "^3.10.1",
     "turndown": "^7.2.0"
   },
@@ -152,7 +156,43 @@ Create `extension/manifest.json`:
 
 Create `extension/vendor/.gitkeep` as an empty file so the unpacked extension directory shape is present before dependencies are installed.
 
-- [ ] **Step 6: Add README setup instructions**
+- [ ] **Step 6: Add placeholder extension entry files**
+
+Create `extension/popup.html`:
+
+```html
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WeChat Article Exporter</title>
+</head>
+<body>
+  <p>WeChat Article Exporter is initializing.</p>
+</body>
+</html>
+```
+
+Create `extension/background.js`:
+
+```js
+// Background export pipeline is implemented in a later task.
+```
+
+Create `extension/shared.js`:
+
+```js
+globalThis.WeChatArticleExporter = globalThis.WeChatArticleExporter || {};
+```
+
+Create `extension/content.js`:
+
+```js
+// Article extraction is implemented in a later task.
+```
+
+- [ ] **Step 7: Add README setup instructions**
 
 Replace `README.md` with:
 
@@ -186,7 +226,7 @@ npm test
 - All processing happens locally in the browser extension.
 ```
 
-- [ ] **Step 7: Install dependencies**
+- [ ] **Step 8: Install dependencies**
 
 Run:
 
@@ -196,7 +236,7 @@ npm install
 
 Expected: PASS with `node_modules` and `package-lock.json` created.
 
-- [ ] **Step 8: Copy vendor bundles**
+- [ ] **Step 9: Copy vendor bundles**
 
 Run:
 
@@ -206,7 +246,17 @@ npm run vendor
 
 Expected: PASS and prints copied paths for `jszip.min.js`, `turndown.js`, and `html2pdf.bundle.min.js`.
 
-- [ ] **Step 9: Run tests after scaffolding**
+- [ ] **Step 10: Check runtime dependency audit**
+
+Run:
+
+```bash
+npm audit --omit=dev
+```
+
+Expected: PASS with no runtime vulnerabilities. Dev-only Vitest/Vite audit warnings are handled separately and do not block the extension runtime scaffold.
+
+- [ ] **Step 11: Run tests after scaffolding**
 
 Run:
 
@@ -216,10 +266,10 @@ npm test
 
 Expected: PASS with "No test files found" or Vitest equivalent empty-suite result. If Vitest exits non-zero because no tests exist, continue to Task 2 where the first tests are added.
 
-- [ ] **Step 10: Commit scaffolding**
+- [ ] **Step 12: Commit scaffolding**
 
 ```bash
-git add package.json package-lock.json scripts/copy-vendor.js extension/manifest.json extension/vendor/.gitkeep README.md
+git add package.json package-lock.json scripts/copy-vendor.js extension/manifest.json extension/popup.html extension/background.js extension/shared.js extension/content.js extension/vendor/.gitkeep README.md
 git commit -m "chore: scaffold chrome extension project"
 ```
 
