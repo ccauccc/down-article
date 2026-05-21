@@ -11,8 +11,21 @@ describe("shared helpers", () => {
   });
 
   it("truncates very long filenames", () => {
-    const value = shared.sanitizeFileName("测".repeat(200));
+    const value = shared.sanitizeFileName("\u6d4b".repeat(200));
     expect(value.length).toBeLessThanOrEqual(80);
+  });
+
+  it("avoids Windows reserved basenames", () => {
+    expect(shared.sanitizeFileName("CON")).toBe("CON-article");
+    expect(shared.sanitizeFileName("lpt9")).toBe("lpt9-article");
+    expect(shared.sanitizeFileName("COM1.txt")).toBe("COM1-article.txt");
+  });
+
+  it("truncates filenames to 80 UTF-8 bytes without splitting surrogate pairs", () => {
+    const value = shared.sanitizeFileName("\u{1f4a1}".repeat(100));
+
+    expect(Buffer.byteLength(value, "utf8")).toBeLessThanOrEqual(80);
+    expect(value).not.toContain("\ufffd");
   });
 
   it("resolves protocol-relative and relative URLs", () => {
@@ -47,5 +60,20 @@ describe("shared helpers", () => {
     expect(report.imageSucceeded).toBe(1);
     expect(report.imageFailed).toBe(1);
     expect(report.failures[0].url).toBe("https://bad");
+  });
+
+  it("normalizes malformed image report entries as failures", () => {
+    const report = shared.createExportReport({
+      images: [null]
+    });
+
+    expect(report.imageTotal).toBe(1);
+    expect(report.imageSucceeded).toBe(0);
+    expect(report.imageFailed).toBe(1);
+    expect(report.failures[0]).toEqual({
+      url: "",
+      localPath: "",
+      error: "Invalid image entry"
+    });
   });
 });

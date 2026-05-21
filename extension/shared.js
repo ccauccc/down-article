@@ -14,6 +14,7 @@
 
   const MAX_FILENAME_LENGTH = 80;
   const DEFAULT_IMAGE_EXTENSION = "jpg";
+  const RESERVED_WINDOWS_BASENAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
 
   const MIME_EXTENSIONS = {
     "image/avif": "avif",
@@ -61,8 +62,47 @@
     ].join("");
   }
 
-  function truncateFileName(value) {
-    return Array.from(value).slice(0, MAX_FILENAME_LENGTH).join("");
+  function utf8ByteLength(value) {
+    const text = String(value || "");
+
+    if (typeof TextEncoder !== "undefined") {
+      return new TextEncoder().encode(text).length;
+    }
+
+    if (typeof Buffer !== "undefined") {
+      return Buffer.byteLength(text, "utf8");
+    }
+
+    return unescape(encodeURIComponent(text)).length;
+  }
+
+  function truncateUtf8(value, maxBytes) {
+    let result = "";
+    let byteLength = 0;
+
+    Array.from(String(value || "")).some(function (character) {
+      const characterBytes = utf8ByteLength(character);
+
+      if (byteLength + characterBytes > maxBytes) {
+        return true;
+      }
+
+      result += character;
+      byteLength += characterBytes;
+      return false;
+    });
+
+    return result;
+  }
+
+  function makeReservedBasenameSafe(value) {
+    const match = String(value || "").match(RESERVED_WINDOWS_BASENAME);
+
+    if (!match) {
+      return value;
+    }
+
+    return match[1] + "-article" + (match[2] || "");
   }
 
   function sanitizeFileName(title) {
@@ -73,7 +113,9 @@
       .replace(/\s+/g, " ")
       .trim();
 
-    return truncateFileName(safeTitle || "wechat-article-" + timestampForFile());
+    const fileName = makeReservedBasenameSafe(safeTitle || "wechat-article-" + timestampForFile());
+
+    return truncateUtf8(fileName, MAX_FILENAME_LENGTH);
   }
 
   function resolveUrl(url, baseUrl) {
@@ -135,7 +177,19 @@
 
   function createExportReport(options) {
     const images = Array.isArray(options && options.images) ? options.images : [];
-    const failures = images
+    const normalizedImages = images.map(function (image) {
+      if (!image || typeof image !== "object") {
+        return {
+          sourceUrl: "",
+          localPath: "",
+          ok: false,
+          error: "Invalid image entry"
+        };
+      }
+
+      return image;
+    });
+    const failures = normalizedImages
       .filter(function (image) {
         return !image.ok;
       })
