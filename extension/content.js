@@ -15,6 +15,10 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (root, shared) {
   "use strict";
 
+  const DANGEROUS_ELEMENTS = new Set(["script", "iframe", "object", "embed", "link", "meta", "base"]);
+  const DANGEROUS_URL_ATTRIBUTES = new Set(["href", "src", "action", "xlink:href"]);
+  const IMAGE_TYPE_HINTS = new Set(["avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "tif", "tiff", "webp"]);
+
   function requireShared() {
     if (!shared) {
       throw new Error("WeChatArticleExporter shared helpers not found");
@@ -63,14 +67,99 @@
     return "";
   }
 
-  function removeScriptsFromElement(element) {
-    Array.from(element.querySelectorAll("script")).forEach(function (script) {
-      script.remove();
+  function normalizeImageTypeHint(value) {
+    const text = String(value || "").trim().toLowerCase();
+    const subtype = text.indexOf("/") === -1 ? text : text.split("/").pop();
+    const cleanSubtype = subtype === "svg+xml" ? "svg" : subtype;
+
+    if (!IMAGE_TYPE_HINTS.has(cleanSubtype)) {
+      return "";
+    }
+
+    if (cleanSubtype === "jpg" || cleanSubtype === "jpeg") {
+      return "image/jpeg";
+    }
+
+    if (cleanSubtype === "tif" || cleanSubtype === "tiff") {
+      return "image/tiff";
+    }
+
+    if (cleanSubtype === "ico") {
+      return "image/x-icon";
+    }
+
+    if (cleanSubtype === "svg") {
+      return "image/svg+xml";
+    }
+
+    return "image/" + cleanSubtype;
+  }
+
+  function imageTypeFromUrl(sourceUrl) {
+    try {
+      return normalizeImageTypeHint(new URL(sourceUrl).searchParams.get("wx_fmt"));
+    } catch (_error) {
+      const match = String(sourceUrl || "").match(/[?&]wx_fmt=([^&#]+)/i);
+      return normalizeImageTypeHint(match && decodeURIComponent(match[1]));
+    }
+  }
+
+  function imageContentTypeHint(image, sourceUrl) {
+    return normalizeImageTypeHint(image.getAttribute("data-type")) ||
+      normalizeImageTypeHint(image.getAttribute("type")) ||
+      imageTypeFromUrl(sourceUrl);
+  }
+
+  function isDangerousUrl(value) {
+    return String(value || "").trim().toLowerCase().indexOf("javascript:") === 0;
+  }
+
+  function sanitizeElementAttributes(element) {
+    Array.from(element.attributes || []).forEach(function (attribute) {
+      const name = attribute.name.toLowerCase();
+
+      if (name.indexOf("on") === 0 || name === "srcdoc") {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+
+      if (DANGEROUS_URL_ATTRIBUTES.has(name) && isDangerousUrl(attribute.value)) {
+        element.removeAttribute(attribute.name);
+      }
     });
   }
 
-  function removeScriptTags(html) {
-    return String(html || "").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+  function sanitizeArticleElement(element) {
+    Array.from(element.querySelectorAll(Array.from(DANGEROUS_ELEMENTS).join(","))).forEach(function (dangerousElement) {
+      dangerousElement.remove();
+    });
+
+    Array.from(element.querySelectorAll("*")).forEach(function (child) {
+      sanitizeElementAttributes(child);
+    });
+  }
+
+  function removeDangerousMarkupFallback(html) {
+    return String(html || "")
+      .replace(/<\s*(script|iframe|object|embed|link|meta|base)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+      .replace(/<\s*(script|iframe|object|embed|link|meta|base)\b[^>]*\/?\s*>/gi, "")
+      .replace(/\s+on[a-z0-9:_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .replace(/\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .replace(/\s+(href|src|action|xlink:href)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi, "")
+      .replace(/\s+(href|src|action|xlink:href)\s*=\s*javascript:[^\s>]*/gi, "");
+  }
+
+  function sanitizeBodyHtml(html) {
+    const documentRef = root && root.document;
+
+    if (documentRef && typeof documentRef.createElement === "function") {
+      const container = documentRef.createElement("div");
+      container.innerHTML = String(html || "");
+      sanitizeArticleElement(container);
+      return container.innerHTML;
+    }
+
+    return removeDangerousMarkupFallback(html);
   }
 
   function escapeHtml(value) {
@@ -94,7 +183,7 @@
     const bodyClone = articleBody.cloneNode(true);
     const images = [];
 
-    removeScriptsFromElement(bodyClone);
+    sanitizeArticleElement(bodyClone);
 
     Array.from(bodyClone.querySelectorAll("img")).forEach(function (image) {
       const sourceImageUrl = imageSource(image, resolvedSourceUrl);
@@ -103,7 +192,7 @@
         return;
       }
 
-      const localPath = helpers.localImageName(images.length, "", sourceImageUrl);
+      const localPath = helpers.localImageName(images.length, imageContentTypeHint(image, sourceImageUrl), sourceImageUrl);
 
       images.push({
         sourceUrl: sourceImageUrl,
@@ -132,7 +221,7 @@
     const author = escapeHtml(article && article.author);
     const publishedAt = escapeHtml(article && article.publishedAt);
     const sourceUrl = article && article.sourceUrl ? escapeHtml(article.sourceUrl) : "";
-    const bodyHtml = removeScriptTags(article && article.bodyHtml);
+    const bodyHtml = sanitizeBodyHtml(article && article.bodyHtml);
     const metadata = [author, publishedAt].filter(Boolean).join(" | ");
     const sourceLink = sourceUrl ? '<a href="' + sourceUrl + '">Source</a>' : "";
     const metadataHtml = [metadata, sourceLink].filter(Boolean).join(" | ");

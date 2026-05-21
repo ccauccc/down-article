@@ -1,9 +1,14 @@
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 
 const require = createRequire(import.meta.url);
 const content = require("../extension/content");
+const shared = require("../extension/shared");
+const contentSource = readFileSync(path.resolve("extension/content.js"), "utf8");
 
 function createDom(body, url = "https://mp.weixin.qq.com/s/demo") {
   return new JSDOM(`<!doctype html><html><body>${body}</body></html>`, { url });
@@ -96,6 +101,75 @@ describe("content extraction", () => {
     expect(article.bodyHtml).not.toContain("<script");
   });
 
+  it("sanitizes dangerous article elements, event handlers, srcdoc, and javascript URLs", () => {
+    const documentRef = createDocument(`
+      <h1 class="rich_media_title">Malicious</h1>
+      <div id="js_content">
+        <p onclick="alert(1)" style="color:red" class="keep">safe</p>
+        <a href=" JAVASCRIPT:alert(1) ">bad link</a>
+        <form action="javascript:alert(1)"><button>bad form</button></form>
+        <img data-src="//mmbiz.qpic.cn/safe.jpg" onerror="alert(1)" src="javascript:alert(2)">
+        <svg onload="alert(1)"><circle></circle></svg>
+        <iframe srcdoc="<script>alert(1)</script>" src="https://example.com"></iframe>
+        <object data="https://example.com"></object>
+        <embed src="https://example.com">
+        <link rel="preload" href="https://example.com">
+        <meta http-equiv="refresh" content="0">
+        <base href="https://evil.example/">
+        <script>alert("nope")</script>
+      </div>
+    `);
+
+    const article = content.extractArticle(documentRef, "https://mp.weixin.qq.com/s/demo");
+    const html = content.buildArticleHtml(article);
+
+    expect(article.bodyHtml).toContain('style="color:red"');
+    expect(article.bodyHtml).toContain('class="keep"');
+    expect(article.bodyHtml).toContain('src="images/img-001.jpg"');
+    expect(article.bodyHtml).not.toMatch(/\son[a-z]+\s*=/i);
+    expect(article.bodyHtml).not.toMatch(/javascript:/i);
+    expect(article.bodyHtml).not.toMatch(/srcdoc/i);
+    expect(article.bodyHtml).not.toContain("<iframe");
+    expect(article.bodyHtml).not.toContain("<script");
+    expect(article.bodyHtml).not.toContain("<object");
+    expect(article.bodyHtml).not.toContain("<embed");
+    expect(article.bodyHtml).not.toContain("<link");
+    expect(article.bodyHtml).not.toContain("<meta");
+    expect(article.bodyHtml).not.toContain("<base");
+    expect(html).not.toMatch(/\son[a-z]+\s*=/i);
+    expect(html).not.toMatch(/javascript:/i);
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toContain("<script");
+  });
+
+  it("infers local image extensions from WeChat URL and DOM format hints", () => {
+    const documentRef = createDocument(`
+      <h1 class="rich_media_title">Images</h1>
+      <div id="js_content">
+        <img data-src="https://mmbiz.qpic.cn/mmbiz_jpg/foo?wx_fmt=png">
+        <img data-src="https://mmbiz.qpic.cn/no-extension" data-type="webp">
+        <img data-src="https://mmbiz.qpic.cn/type-hint" type="image/gif">
+      </div>
+    `);
+
+    const article = content.extractArticle(documentRef, "https://mp.weixin.qq.com/s/demo");
+
+    expect(article.images).toEqual([
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/mmbiz_jpg/foo?wx_fmt=png",
+        localPath: "images/img-001.png"
+      },
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/no-extension",
+        localPath: "images/img-002.webp"
+      },
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/type-hint",
+        localPath: "images/img-003.gif"
+      }
+    ]);
+  });
+
   it("throws a clear error when article content is missing", () => {
     const documentRef = createDocument(`<h1 class="rich_media_title">Missing</h1>`);
 
@@ -130,6 +204,24 @@ describe("content extraction", () => {
     await expect(content.buildPdfBase64({ title: "Demo", bodyHtml: "<p>body</p>" })).resolves.toBe("");
   });
 
+  it("builds markdown when TurndownService is available", async () => {
+    class FakeTurndownService {
+      constructor(options) {
+        this.options = options;
+      }
+
+      turndown(html) {
+        return `converted:${html}`;
+      }
+    }
+
+    vi.stubGlobal("TurndownService", FakeTurndownService);
+
+    await expect(content.buildMarkdown({ title: "Demo", bodyHtml: "<p>body</p>" })).resolves.toBe(
+      "# Demo\n\nconverted:<p>body</p>\n"
+    );
+  });
+
   it("handles export requests using current document and requested companion format", async () => {
     const dom = createDom(`
       <h1 class="rich_media_title"> Demo Article </h1>
@@ -152,5 +244,49 @@ describe("content extraction", () => {
     expect(payload.files.html).toContain("<!doctype html>");
     expect(payload.files.markdown).toContain("# Demo Article");
     expect(payload.files.pdfBase64).toBe("");
+  });
+
+  it("registers a Chrome runtime listener and responds asynchronously to export requests", async () => {
+    const dom = createDom(`
+      <h1 class="rich_media_title"> Runtime Article </h1>
+      <div id="js_content"><p>runtime body</p></div>
+    `);
+    let registeredListener;
+    const sandbox = {
+      console,
+      setTimeout,
+      clearTimeout,
+      WeChatArticleExporter: {
+        shared
+      },
+      document: dom.window.document,
+      window: dom.window,
+      chrome: {
+        runtime: {
+          onMessage: {
+            addListener(listener) {
+              registeredListener = listener;
+            }
+          }
+        }
+      }
+    };
+    sandbox.globalThis = sandbox;
+
+    vm.runInNewContext(contentSource, sandbox, { filename: "content.js" });
+
+    const response = await new Promise((resolve) => {
+      const returned = registeredListener(
+        { type: "EXPORT_WECHAT_ARTICLE", format: "html" },
+        {},
+        resolve
+      );
+
+      expect(returned).toBe(true);
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.payload.article.title).toBe("Runtime Article");
+    expect(response.payload.files.html).toContain("<!doctype html>");
   });
 });
