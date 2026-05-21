@@ -15,6 +15,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (root, shared) {
   "use strict";
 
+  const SAFE_IMAGE_LOCAL_PATH = /^images\/[A-Za-z0-9_-]+\.(?:avif|bmp|gif|ico|jpe?g|png|svg|tiff?|webp)$/i;
+
   function requireShared() {
     if (!shared) {
       throw new Error("WeChatArticleExporter shared helpers not found");
@@ -49,12 +51,47 @@
     throw new Error("Base64 decoder not available");
   }
 
-  function imageResultForReport(image) {
-    return {
+  function hasImageData(image) {
+    return Boolean(image && image.data !== undefined && image.data !== null);
+  }
+
+  function isSafeImageLocalPath(localPath) {
+    return SAFE_IMAGE_LOCAL_PATH.test(String(localPath || ""));
+  }
+
+  function normalizeImageResult(image) {
+    const result = {
       sourceUrl: image && image.sourceUrl ? image.sourceUrl : "",
       localPath: image && image.localPath ? image.localPath : "",
-      ok: Boolean(image && image.ok),
+      ok: false,
       error: image && image.error ? image.error : ""
+    };
+
+    if (!image || !image.ok) {
+      return result;
+    }
+
+    if (!isSafeImageLocalPath(result.localPath)) {
+      result.error = "Unsafe image path";
+      return result;
+    }
+
+    if (!hasImageData(image)) {
+      result.error = "Image data missing";
+      return result;
+    }
+
+    result.ok = true;
+    result.error = "";
+    return result;
+  }
+
+  function imageResultForReport(result) {
+    return {
+      sourceUrl: result.sourceUrl,
+      localPath: result.localPath,
+      ok: result.ok,
+      error: result.error
     };
   }
 
@@ -64,7 +101,8 @@
     const archive = new JSZip();
     const files = options && options.files || {};
     const images = Array.isArray(options && options.images) ? options.images : [];
-    const imageResults = images.map(imageResultForReport);
+    const normalizedImages = images.map(normalizeImageResult);
+    const imageResults = normalizedImages.map(imageResultForReport);
 
     archive.file("article.html", files.html || "");
 
@@ -76,9 +114,9 @@
       archive.file("article.pdf", base64ToUint8Array(files.pdfBase64));
     }
 
-    images.forEach(function (image) {
-      if (image && image.ok && image.data && image.localPath) {
-        archive.file(image.localPath, image.data);
+    normalizedImages.forEach(function (image, index) {
+      if (image.ok) {
+        archive.file(image.localPath, images[index].data);
       }
     });
 
