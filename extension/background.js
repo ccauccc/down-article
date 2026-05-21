@@ -1,6 +1,65 @@
 importScripts("vendor/jszip.min.js", "shared.js", "zip.js");
 
+const MAX_CONCURRENT_IMAGE_FETCHES = 4;
+const ALLOWED_IMAGE_HOSTS = new Set([
+  "mp.weixin.qq.com",
+  "mmbiz.qpic.cn"
+]);
+
+function imageUrlError(sourceUrl) {
+  if (!sourceUrl || !String(sourceUrl).trim()) {
+    return "Missing image URL";
+  }
+
+  try {
+    const url = new URL(sourceUrl);
+    const protocol = url.protocol.toLowerCase();
+    const hostname = url.hostname.toLowerCase();
+
+    if (protocol !== "http:" && protocol !== "https:") {
+      return "Unsupported image URL";
+    }
+
+    if (!ALLOWED_IMAGE_HOSTS.has(hostname)) {
+      return "Unsupported image host";
+    }
+  } catch (_error) {
+    return "Unsupported image URL";
+  }
+
+  return "";
+}
+
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(Array.from({
+    length: Math.min(limit, items.length)
+  }, worker));
+
+  return results;
+}
+
 async function fetchImage(image) {
+  const validationError = imageUrlError(image && image.sourceUrl);
+
+  if (validationError) {
+    return {
+      ...image,
+      ok: false,
+      error: validationError
+    };
+  }
+
   try {
     const response = await fetch(image.sourceUrl, {
       credentials: "include",
@@ -41,7 +100,9 @@ async function downloadBase64Zip(base64, filename) {
 }
 
 async function exportArticle(payload) {
-  const imageResults = await Promise.all(payload.article.images.map(fetchImage));
+  const images = Array.isArray(payload.article.images) ? payload.article.images : [];
+  const imageResults = await mapWithConcurrency(images, MAX_CONCURRENT_IMAGE_FETCHES, fetchImage);
+  const normalizedImageResults = WeChatArticleExporter.zip.normalizeImageResults(imageResults);
   const zipBase64 = await WeChatArticleExporter.zip.buildArticleZipBase64({
     JSZip: JSZip,
     title: payload.article.title,
@@ -55,7 +116,7 @@ async function exportArticle(payload) {
 
   return {
     imageTotal: imageResults.length,
-    imageFailed: imageResults.filter(function (image) {
+    imageFailed: normalizedImageResults.filter(function (image) {
       return !image.ok;
     }).length
   };

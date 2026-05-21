@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Export the current WeChat public account article as a local ZIP archive.",
   "permissions": ["activeTab", "downloads"],
-  "host_permissions": ["*://mp.weixin.qq.com/*"],
+  "host_permissions": ["*://mp.weixin.qq.com/*", "*://mmbiz.qpic.cn/*"],
   "action": {
     "default_popup": "popup.html"
   },

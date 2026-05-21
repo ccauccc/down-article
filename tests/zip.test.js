@@ -159,6 +159,47 @@ describe("zip packaging", () => {
     });
   });
 
+  it("exposes report-compatible normalized image results", () => {
+    expect(zip.normalizeImageResults([
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/ok.jpg",
+        localPath: "images/img-001.jpg",
+        ok: true,
+        data: new Uint8Array([1, 2, 3])
+      },
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/no-path.jpg",
+        ok: true,
+        data: new Uint8Array([4, 5, 6])
+      },
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/fetch-failed.jpg",
+        localPath: "images/img-003.jpg",
+        ok: false,
+        error: "HTTP 403"
+      }
+    ])).toEqual([
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/ok.jpg",
+        localPath: "images/img-001.jpg",
+        ok: true,
+        error: ""
+      },
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/no-path.jpg",
+        localPath: "",
+        ok: false,
+        error: "Unsafe image path"
+      },
+      {
+        sourceUrl: "https://mmbiz.qpic.cn/fetch-failed.jpg",
+        localPath: "images/img-003.jpg",
+        ok: false,
+        error: "HTTP 403"
+      }
+    ]);
+  });
+
   it("rejects unsafe image paths before writing and reports them as failed", async () => {
     const archive = await loadArticleZip({
       files: {

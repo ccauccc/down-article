@@ -95,6 +95,12 @@
     };
   }
 
+  function normalizeImageResults(images) {
+    const imageList = Array.isArray(images) ? images : [];
+
+    return imageList.map(normalizeImageResult).map(imageResultForReport);
+  }
+
   async function buildArticleZipBase64(options) {
     const helpers = requireShared();
     const JSZip = options && options.JSZip;
@@ -131,6 +137,7 @@
 
   return {
     base64ToUint8Array: base64ToUint8Array,
-    buildArticleZipBase64: buildArticleZipBase64
+    buildArticleZipBase64: buildArticleZipBase64,
+    normalizeImageResults: normalizeImageResults
   };
 });
