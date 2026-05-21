@@ -1,10 +1,36 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>WeChat Article Exporter</title>
+    <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    WeChat Article Exporter is initializing.
+    <main class="popup">
+      <h1>文章导出</h1>
+
+      <fieldset>
+        <legend>导出格式</legend>
+
+        <label>
+          <input type="radio" name="format" value="html" checked>
+          HTML 压缩包
+        </label>
+        <label>
+          <input type="radio" name="format" value="markdown">
+          Markdown 压缩包
+        </label>
+        <label>
+          <input type="radio" name="format" value="pdf">
+          PDF 压缩包
+        </label>
+      </fieldset>
+
+      <button id="exportButton" type="button">导出</button>
+      <p id="status" role="status" aria-live="polite">打开公众号文章后即可导出。</p>
+    </main>
+
+    <script src="popup.js"></script>
   </body>
 </html>
